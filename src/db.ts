@@ -23,6 +23,9 @@ export class SafeDatabase {
     this.dbPath = dbPath;
     this.db = new DatabaseSync(dbPath);
 
+    // Concurrency: wait up to 5 seconds if another process is writing (e.g. WAL mode)
+    this.db.exec('PRAGMA busy_timeout = 5000;');
+
     // Hard-enforce read-only mode at the SQLite engine level
     this.db.exec('PRAGMA query_only = ON;');
   }
@@ -50,7 +53,6 @@ export class SafeDatabase {
    * Returns schema columns and types for a specific table.
    */
   public describeTable(tableName: string): ColumnInfo[] {
-    // Sanitize table name (only letters, numbers, underscores)
     if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
       throw new Error(`Invalid table name: "${tableName}". Table names must only contain alphanumeric characters and underscores.`);
     }

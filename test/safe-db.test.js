@@ -17,11 +17,12 @@ test.before(() => {
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
       email TEXT UNIQUE,
-      role TEXT DEFAULT 'user'
+      role TEXT DEFAULT 'user',
+      status TEXT DEFAULT 'active'
     );
-    INSERT INTO users (name, email, role) VALUES ('Alice', 'alice@test.com', 'admin');
-    INSERT INTO users (name, email, role) VALUES ('Bob', 'bob@test.com', 'user');
-    INSERT INTO users (name, email, role) VALUES ('Charlie', 'charlie@test.com', 'user');
+    INSERT INTO users (name, email, role, status) VALUES ('Alice', 'alice@test.com', 'admin', 'active');
+    INSERT INTO users (name, email, role, status) VALUES ('Bob', 'bob@test.com', 'user', 'DELETED');
+    INSERT INTO users (name, email, role, status) VALUES ('Charlie', 'charlie@test.com', 'user', 'UPDATE_PENDING');
   `);
   db.close();
 });
@@ -34,6 +35,17 @@ test('Validator: allows legitimate SELECT queries', () => {
   const res = validateReadOnlyQuery('SELECT * FROM users WHERE id = 1');
   assert.equal(res.valid, true);
   assert.match(res.sanitizedQuery, /SELECT \* FROM users WHERE id = 1 LIMIT 50/);
+});
+
+test('Validator: allows legitimate queries with forbidden words inside string literals', () => {
+  const res = validateReadOnlyQuery("SELECT * FROM users WHERE status = 'DELETED'");
+  assert.equal(res.valid, true);
+  assert.match(res.sanitizedQuery, /SELECT \* FROM users WHERE status = 'DELETED' LIMIT 50/);
+});
+
+test('Validator: allows Common Table Expressions (WITH cte AS ...)', () => {
+  const res = validateReadOnlyQuery('WITH admins AS (SELECT * FROM users WHERE role = "admin") SELECT * FROM admins');
+  assert.equal(res.valid, true);
 });
 
 test('Validator: blocks DROP TABLE', () => {
@@ -76,7 +88,7 @@ test('Database: listTables returns user tables', () => {
 test('Database: describeTable returns correct columns', () => {
   const safeDb = new SafeDatabase(TEST_DB);
   const cols = safeDb.describeTable('users');
-  assert.equal(cols.length, 4);
+  assert.equal(cols.length, 5);
   assert.equal(cols[0].name, 'id');
   assert.equal(cols[1].name, 'name');
   safeDb.close();
@@ -90,11 +102,11 @@ test('Database: sampleTable returns rows', () => {
   safeDb.close();
 });
 
-test('Database: executeQuery executes read query and engine blocks mutation', () => {
+test('Database: executeQuery executes read query with string literals safely', () => {
   const safeDb = new SafeDatabase(TEST_DB);
-  const result = safeDb.executeQuery('SELECT name FROM users ORDER BY id ASC');
-  assert.equal(result.rowCount, 3);
-  assert.equal(result.rows[0].name, 'Alice');
+  const result = safeDb.executeQuery("SELECT name FROM users WHERE status = 'DELETED'");
+  assert.equal(result.rowCount, 1);
+  assert.equal(result.rows[0].name, 'Bob');
 
   // Attempt write
   assert.throws(() => {

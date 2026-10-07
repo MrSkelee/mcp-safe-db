@@ -14,13 +14,10 @@ const FORBIDDEN_KEYWORDS = [
   'REPLACE',
   'GRANT',
   'REVOKE',
-  'EXEC',
-  'EXECUTE',
   'ATTACH',
   'DETACH',
   'VACUUM',
   'REINDEX',
-  'INTO',
 ];
 
 export interface ValidationResult {
@@ -39,18 +36,18 @@ export function validateReadOnlyQuery(query: string, maxRows = 50): ValidationRe
 
   const trimmed = query.trim();
 
-  // Strip comments to prevent hidden keyword injection
-  const stripped = trimmed
-    .replace(/\/\*[\s\S]*?\*\//g, ' ') // multi-line comments
-    .replace(/--.*$/gm, ' ')            // single-line comments
+  // 1. Strip comments
+  const withoutComments = trimmed
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--.*$/gm, ' ')
     .trim();
 
-  if (!stripped) {
+  if (!withoutComments) {
     return { valid: false, reason: 'Query contains only comments or whitespace.' };
   }
 
-  // Prevent multiple statements separated by semicolons (e.g. "SELECT 1; DROP TABLE users;")
-  const statements = stripped.split(';').map(s => s.trim()).filter(Boolean);
+  // 2. Prevent multi-statement attacks
+  const statements = withoutComments.split(';').map(s => s.trim()).filter(Boolean);
   if (statements.length > 1) {
     return {
       valid: false,
@@ -58,9 +55,15 @@ export function validateReadOnlyQuery(query: string, maxRows = 50): ValidationRe
     };
   }
 
-  const normalized = stripped.toUpperCase();
+  // 3. Strip string literals ('...' and "...") to avoid false positives on legitimate values
+  // e.g. WHERE status = 'DELETED' or WHERE note = 'Please update records'
+  const withoutStrings = withoutComments
+    .replace(/'(?:''|[^'])*'/g, "''")
+    .replace(/"(?:""|[^"])*"/g, '""');
 
-  // Must begin with a read-only keyword
+  const normalized = withoutStrings.toUpperCase();
+
+  // 4. Must start with a read-only keyword
   const isReadOnlyStart =
     normalized.startsWith('SELECT') ||
     normalized.startsWith('WITH') ||
@@ -74,7 +77,7 @@ export function validateReadOnlyQuery(query: string, maxRows = 50): ValidationRe
     };
   }
 
-  // Check for forbidden mutation keywords
+  // 5. Check for forbidden mutation keywords outside string literals
   const tokens = normalized.match(/\b[A-Z_]+\b/g) || [];
   for (const token of tokens) {
     if (FORBIDDEN_KEYWORDS.includes(token)) {
@@ -85,18 +88,18 @@ export function validateReadOnlyQuery(query: string, maxRows = 50): ValidationRe
     }
   }
 
-  // Check and cap LIMIT to prevent blowing up the AI agent's context window
-  let finalQuery = stripped;
-  const limitMatch = stripped.match(/\bLIMIT\s+(\d+)/i);
+  // 6. Safe LIMIT enforcement
+  let finalQuery = withoutComments;
+  const limitMatch = withoutComments.match(/\bLIMIT\s+(\d+)\s*$/i);
 
   if (limitMatch) {
     const requestedLimit = parseInt(limitMatch[1], 10);
     if (requestedLimit > maxRows) {
-      finalQuery = stripped.replace(/\bLIMIT\s+\d+/i, `LIMIT ${maxRows}`);
+      finalQuery = withoutComments.replace(/\bLIMIT\s+\d+\s*$/i, `LIMIT ${maxRows}`);
     }
   } else {
-    // Automatically append LIMIT if not specified
-    finalQuery = `${stripped.replace(/;+$/, '')} LIMIT ${maxRows}`;
+    // Append LIMIT if not present at the end
+    finalQuery = `${withoutComments.replace(/;+$/, '')} LIMIT ${maxRows}`;
   }
 
   return {

@@ -1,5 +1,16 @@
 #!/usr/bin/env node
 
+// Suppress ExperimentalWarning for node:sqlite to ensure clean MCP JSON-RPC stdio
+const originalEmit = process.emit;
+// @ts-ignore
+process.emit = function (name: any, data: any, ...args: any[]) {
+  if (name === 'warning' && typeof data === 'object' && data?.name === 'ExperimentalWarning') {
+    return false;
+  }
+  // @ts-ignore
+  return originalEmit.apply(process, [name, data, ...args]);
+};
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -11,16 +22,22 @@ import {
 import { SafeDatabase } from './db.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
 // Parse database file path from CLI args or environment
 const args = process.argv.slice(2);
-const dbArg = args[0] || process.env.DATABASE_PATH;
+let dbArg = args[0] || process.env.DATABASE_PATH;
 
 if (!dbArg) {
   console.error('Error: Database path is required.');
-  console.error('Usage: mcp-safe-db <path-to-database.sqlite>');
+  console.error('Usage: npx mcp-safe-db <path-to-database.sqlite>');
   console.error('   or set DATABASE_PATH environment variable.');
   process.exit(1);
+}
+
+// Expand ~ to user home directory if present
+if (dbArg.startsWith('~')) {
+  dbArg = path.join(os.homedir(), dbArg.slice(1));
 }
 
 const resolvedPath = path.resolve(process.cwd(), dbArg);
@@ -117,7 +134,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 // Handle Tool Execution
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
+  const { name, arguments: toolArgs } = request.params;
 
   try {
     switch (name) {
@@ -134,7 +151,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'describe_table': {
-        const tableName = String(args?.tableName || '');
+        const tableName = String(toolArgs?.tableName || '');
         if (!tableName) {
           throw new McpError(ErrorCode.InvalidParams, 'tableName is required');
         }
@@ -150,11 +167,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'sample_table': {
-        const tableName = String(args?.tableName || '');
+        const tableName = String(toolArgs?.tableName || '');
         if (!tableName) {
           throw new McpError(ErrorCode.InvalidParams, 'tableName is required');
         }
-        const count = typeof args?.count === 'number' ? args.count : 3;
+        const count = typeof toolArgs?.count === 'number' ? toolArgs.count : 3;
         const rows = db.sampleTable(tableName, count);
         return {
           content: [
@@ -167,11 +184,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'safe_query': {
-        const query = String(args?.query || '');
+        const query = String(toolArgs?.query || '');
         if (!query) {
           throw new McpError(ErrorCode.InvalidParams, 'query is required');
         }
-        const maxRows = typeof args?.maxRows === 'number' ? args.maxRows : 50;
+        const maxRows = typeof toolArgs?.maxRows === 'number' ? toolArgs.maxRows : 50;
         const result = db.executeQuery(query, maxRows);
         return {
           content: [

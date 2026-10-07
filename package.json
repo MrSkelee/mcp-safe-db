@@ -4,13 +4,20 @@
   "description": "Zero-risk, strictly read-only SQL database inspector for AI agents (Claude, Antigravity, Cursor)",
   "main": "dist/index.js",
   "bin": {
-    "mcp-safe-db": "./dist/index.js"
+    "mcp-safe-db": "./bin/mcp-safe-db.js"
   },
   "type": "module",
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
-    "test": "node --test test/safe-db.test.js"
+    "prepublishOnly": "npm run build && npm test",
+    "start": "node --no-warnings dist/index.js",
+    "test": "node --no-warnings --test test/safe-db.test.js"
   },
   "keywords": [
     "mcp",
