@@ -1,10 +1,4 @@
-/**
- * SQL Safety & Cybersecurity Validator
- * Multi-layer defense against SQL injection, data exfiltration, and mutation.
- */
-
 const FORBIDDEN_KEYWORDS = [
-  // Mutation keywords
   'INSERT',
   'UPDATE',
   'DELETE',
@@ -15,13 +9,11 @@ const FORBIDDEN_KEYWORDS = [
   'REPLACE',
   'GRANT',
   'REVOKE',
-  // Database / Environment manipulation
   'ATTACH',
   'DETACH',
   'VACUUM',
   'REINDEX',
-  'PRAGMA', // Pragma commands are blocked in queries; schema inspection uses describeTable tool
-  // Extension & System execution vectors
+  'PRAGMA',
   'LOAD_EXTENSION',
   'WRITEFILE',
   'READFILE',
@@ -36,22 +28,18 @@ export interface ValidationResult {
   sanitizedQuery?: string;
 }
 
-/**
- * Validates a SQL query and guarantees strict read-only execution.
- */
 export function validateReadOnlyQuery(query: string, maxRows = 50): ValidationResult {
   if (!query || typeof query !== 'string') {
     return { valid: false, reason: 'Query cannot be empty.' };
   }
 
-  // Maximum query length to prevent buffer/ReDoS attacks (max 8KB)
   if (query.length > 8192) {
     return { valid: false, reason: 'Query exceeds maximum allowed length of 8KB.' };
   }
 
   const trimmed = query.trim();
 
-  // 1. Strip comments
+  // Strip comments
   const withoutComments = trimmed
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .replace(/--.*$/gm, ' ')
@@ -61,7 +49,7 @@ export function validateReadOnlyQuery(query: string, maxRows = 50): ValidationRe
     return { valid: false, reason: 'Query contains only comments or whitespace.' };
   }
 
-  // 2. Prevent multi-statement attacks
+  // Block multi-statement queries
   const statements = withoutComments.split(';').map(s => s.trim()).filter(Boolean);
   if (statements.length > 1) {
     return {
@@ -70,15 +58,13 @@ export function validateReadOnlyQuery(query: string, maxRows = 50): ValidationRe
     };
   }
 
-  // 3. Strip string literals ('...' and "...") to avoid false positives on legitimate values
-  // e.g. WHERE status = 'DELETED' or WHERE note = 'Please update records'
+  // Strip string literals to prevent false positives on values like 'DELETED'
   const withoutStrings = withoutComments
     .replace(/'(?:''|[^'])*'/g, "''")
     .replace(/"(?:""|[^"])*"/g, '""');
 
   const normalized = withoutStrings.toUpperCase();
 
-  // 4. Must start with an approved read-only keyword
   const isReadOnlyStart =
     normalized.startsWith('SELECT') ||
     normalized.startsWith('WITH') ||
@@ -91,7 +77,7 @@ export function validateReadOnlyQuery(query: string, maxRows = 50): ValidationRe
     };
   }
 
-  // 5. Check for forbidden security/mutation tokens outside string literals
+  // Check forbidden keywords outside string literals
   const tokens = normalized.match(/\b[A-Z_]+\b/g) || [];
   for (const token of tokens) {
     if (FORBIDDEN_KEYWORDS.includes(token)) {
@@ -102,7 +88,7 @@ export function validateReadOnlyQuery(query: string, maxRows = 50): ValidationRe
     }
   }
 
-  // 6. Safe LIMIT enforcement
+  // Enforce row limit
   let finalQuery = withoutComments;
   const limitMatch = withoutComments.match(/\bLIMIT\s+(\d+)\s*$/i);
 
@@ -112,7 +98,6 @@ export function validateReadOnlyQuery(query: string, maxRows = 50): ValidationRe
       finalQuery = withoutComments.replace(/\bLIMIT\s+\d+\s*$/i, `LIMIT ${maxRows}`);
     }
   } else {
-    // Append LIMIT if not present at the end
     finalQuery = `${withoutComments.replace(/;+$/, '')} LIMIT ${maxRows}`;
   }
 

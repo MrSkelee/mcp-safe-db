@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-// Suppress ExperimentalWarning for node:sqlite to ensure clean MCP JSON-RPC stdio
 const originalEmit = process.emit;
 // @ts-ignore
 process.emit = function (name: any, data: any, ...args: any[]) {
@@ -24,18 +23,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-// Parse database file path from CLI args or environment
 const args = process.argv.slice(2);
 let dbArg = args[0] || process.env.DATABASE_PATH;
 
 if (!dbArg) {
   console.error('Error: Database path is required.');
   console.error('Usage: npx mcp-safe-db <path-to-database.sqlite>');
-  console.error('   or set DATABASE_PATH environment variable.');
   process.exit(1);
 }
 
-// Expand ~ to user home directory if present
 if (dbArg.startsWith('~')) {
   dbArg = path.join(os.homedir(), dbArg.slice(1));
 }
@@ -48,7 +44,7 @@ if (!fs.existsSync(resolvedPath)) {
 
 const stats = fs.statSync(resolvedPath);
 if (!stats.isFile()) {
-  console.error(`Error: Path is not a regular file: ${resolvedPath}`);
+  console.error(`Error: Path is not a file: ${resolvedPath}`);
   process.exit(1);
 }
 
@@ -72,7 +68,6 @@ const server = new Server(
   }
 );
 
-// Register Tool Definitions
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -124,7 +119,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             query: {
               type: 'string',
-              description: 'The read-only SQL query to execute (e.g. "SELECT * FROM users WHERE active = 1").',
+              description: 'The read-only SQL query to execute.',
             },
             maxRows: {
               type: 'number',
@@ -138,7 +133,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
-// Handle Tool Execution
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: toolArgs } = request.params;
 

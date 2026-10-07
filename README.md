@@ -12,7 +12,7 @@ Let your AI explore schemas, inspect tables, and run `SELECT` queries without ri
 
 ## ⚡ The Problem
 
-Giving an AI assistant database access is scary:
+Giving an AI assistant database access is risky:
 - A hallucinated `UPDATE` query without a `WHERE` clause can wipe production or local dev data.
 - Semicolon injection (`SELECT 1; DROP TABLE users;`) can execute hidden destructive actions.
 - Unbounded queries (`SELECT *`) blow up context windows and burn API tokens.
@@ -23,7 +23,7 @@ Giving an AI assistant database access is scary:
 
 ---
 
-## 🚀 Quickstart (30 seconds)
+## 🚀 Quickstart
 
 ### Direct execution via `npx`
 ```bash
@@ -55,8 +55,8 @@ Add to your `mcp_config.json`:
 {
   "mcpServers": {
     "safe-db": {
-      "command": "node",
-      "args": ["dist/index.js", "./demo.sqlite"]
+      "command": "npx",
+      "args": ["-y", "mcp-safe-db", "/absolute/path/to/your/database.sqlite"]
     }
   }
 }
@@ -81,10 +81,14 @@ Add to your `mcp_config.json`:
 npm test
 ```
 
-Runs the 10 automated security and safety tests.
+Runs the automated security and safety tests.
 
 ---
 
 ## 📄 License
 
 MIT © 2026
+
+---
+
+Vibe Coded with 💖 by MrSkele & Antigravity

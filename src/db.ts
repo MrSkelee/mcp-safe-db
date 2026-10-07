@@ -15,7 +15,7 @@ export interface TableSummary {
   rowCountEstimate?: number;
 }
 
-const MAX_CELL_STRING_LENGTH = 10000; // Truncate individual huge text/blob fields to avoid memory exhaustion
+const MAX_CELL_STRING_LENGTH = 10000;
 
 function sanitizeRow(row: Record<string, any>): Record<string, any> {
   const sanitized: Record<string, any> = {};
@@ -39,16 +39,10 @@ export class SafeDatabase {
     this.dbPath = dbPath;
     this.db = new DatabaseSync(dbPath);
 
-    // Concurrency: wait up to 5 seconds if another process is writing (e.g. WAL mode)
     this.db.exec('PRAGMA busy_timeout = 5000;');
-
-    // Hard-enforce read-only mode at the SQLite engine level
     this.db.exec('PRAGMA query_only = ON;');
   }
 
-  /**
-   * List all user tables and views in the database.
-   */
   public listTables(): TableSummary[] {
     const query = `
       SELECT name, type 
@@ -65,12 +59,9 @@ export class SafeDatabase {
     }));
   }
 
-  /**
-   * Returns schema columns and types for a specific table.
-   */
   public describeTable(tableName: string): ColumnInfo[] {
     if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
-      throw new Error(`Invalid table name: "${tableName}". Table names must only contain alphanumeric characters and underscores.`);
+      throw new Error(`Invalid table name: "${tableName}".`);
     }
 
     const stmt = this.db.prepare(`PRAGMA table_info(${tableName});`);
@@ -84,9 +75,6 @@ export class SafeDatabase {
     }));
   }
 
-  /**
-   * Samples top N rows from a table.
-   */
   public sampleTable(tableName: string, count = 3): Record<string, any>[] {
     if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
       throw new Error(`Invalid table name: "${tableName}".`);
@@ -97,9 +85,6 @@ export class SafeDatabase {
     return rawRows.map(sanitizeRow);
   }
 
-  /**
-   * Safely execute a validated read-only SQL query.
-   */
   public executeQuery(query: string, maxRows = 50): { rows: Record<string, any>[]; rowCount: number; executedQuery: string; durationMs: number } {
     const validation = validateReadOnlyQuery(query, maxRows);
     if (!validation.valid || !validation.sanitizedQuery) {
