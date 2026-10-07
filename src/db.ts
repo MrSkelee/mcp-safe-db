@@ -15,6 +15,22 @@ export interface TableSummary {
   rowCountEstimate?: number;
 }
 
+const MAX_CELL_STRING_LENGTH = 10000; // Truncate individual huge text/blob fields to avoid memory exhaustion
+
+function sanitizeRow(row: Record<string, any>): Record<string, any> {
+  const sanitized: Record<string, any> = {};
+  for (const [key, val] of Object.entries(row)) {
+    if (typeof val === 'string' && val.length > MAX_CELL_STRING_LENGTH) {
+      sanitized[key] = `${val.slice(0, MAX_CELL_STRING_LENGTH)}... [TRUNCATED]`;
+    } else if (Buffer.isBuffer(val)) {
+      sanitized[key] = `<BLOB (${val.length} bytes)>`;
+    } else {
+      sanitized[key] = val;
+    }
+  }
+  return sanitized;
+}
+
 export class SafeDatabase {
   private db: DatabaseSync;
   private dbPath: string;
@@ -77,7 +93,8 @@ export class SafeDatabase {
     }
     const safeCount = Math.min(Math.max(1, count), 10);
     const stmt = this.db.prepare(`SELECT * FROM ${tableName} LIMIT ${safeCount};`);
-    return stmt.all() as Record<string, any>[];
+    const rawRows = stmt.all() as Record<string, any>[];
+    return rawRows.map(sanitizeRow);
   }
 
   /**
@@ -91,8 +108,9 @@ export class SafeDatabase {
 
     const start = performance.now();
     const stmt = this.db.prepare(validation.sanitizedQuery);
-    const rows = stmt.all() as Record<string, any>[];
+    const rawRows = stmt.all() as Record<string, any>[];
     const durationMs = Math.round((performance.now() - start) * 100) / 100;
+    const rows = rawRows.map(sanitizeRow);
 
     return {
       rows,

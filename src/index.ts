@@ -46,6 +46,12 @@ if (!fs.existsSync(resolvedPath)) {
   process.exit(1);
 }
 
+const stats = fs.statSync(resolvedPath);
+if (!stats.isFile()) {
+  console.error(`Error: Path is not a regular file: ${resolvedPath}`);
+  process.exit(1);
+}
+
 let db: SafeDatabase;
 try {
   db = new SafeDatabase(resolvedPath);

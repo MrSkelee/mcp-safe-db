@@ -60,6 +60,24 @@ test('Validator: blocks DELETE', () => {
   assert.match(res.reason, /Only read-only statements/);
 });
 
+test('Security: blocks LOAD_EXTENSION attack vector', () => {
+  const res = validateReadOnlyQuery("SELECT load_extension('malicious.dll')");
+  assert.equal(res.valid, false);
+  assert.match(res.reason, /LOAD_EXTENSION/);
+});
+
+test('Security: blocks ATTACH DATABASE attack vector', () => {
+  const res = validateReadOnlyQuery("ATTACH DATABASE 'other.db' AS other");
+  assert.equal(res.valid, false);
+});
+
+test('Security: blocks oversize query exceeding 8KB', () => {
+  const giant = 'SELECT * FROM users WHERE ' + 'id = 1 AND '.repeat(1000);
+  const res = validateReadOnlyQuery(giant);
+  assert.equal(res.valid, false);
+  assert.match(res.reason, /8KB/);
+});
+
 test('Validator: blocks multi-statement injection (SELECT 1; DROP TABLE users)', () => {
   const res = validateReadOnlyQuery('SELECT * FROM users; DROP TABLE users;');
   assert.equal(res.valid, false);

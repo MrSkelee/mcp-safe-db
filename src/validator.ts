@@ -1,9 +1,10 @@
 /**
- * SQL Safety Validator
- * Ensures only harmless, read-only queries are executed.
+ * SQL Safety & Cybersecurity Validator
+ * Multi-layer defense against SQL injection, data exfiltration, and mutation.
  */
 
 const FORBIDDEN_KEYWORDS = [
+  // Mutation keywords
   'INSERT',
   'UPDATE',
   'DELETE',
@@ -14,10 +15,19 @@ const FORBIDDEN_KEYWORDS = [
   'REPLACE',
   'GRANT',
   'REVOKE',
+  // Database / Environment manipulation
   'ATTACH',
   'DETACH',
   'VACUUM',
   'REINDEX',
+  'PRAGMA', // Pragma commands are blocked in queries; schema inspection uses describeTable tool
+  // Extension & System execution vectors
+  'LOAD_EXTENSION',
+  'WRITEFILE',
+  'READFILE',
+  'SHELL',
+  'SYSTEM',
+  'EDIT',
 ];
 
 export interface ValidationResult {
@@ -27,11 +37,16 @@ export interface ValidationResult {
 }
 
 /**
- * Validates a SQL query and guarantees read-only execution.
+ * Validates a SQL query and guarantees strict read-only execution.
  */
 export function validateReadOnlyQuery(query: string, maxRows = 50): ValidationResult {
   if (!query || typeof query !== 'string') {
     return { valid: false, reason: 'Query cannot be empty.' };
+  }
+
+  // Maximum query length to prevent buffer/ReDoS attacks (max 8KB)
+  if (query.length > 8192) {
+    return { valid: false, reason: 'Query exceeds maximum allowed length of 8KB.' };
   }
 
   const trimmed = query.trim();
@@ -63,12 +78,11 @@ export function validateReadOnlyQuery(query: string, maxRows = 50): ValidationRe
 
   const normalized = withoutStrings.toUpperCase();
 
-  // 4. Must start with a read-only keyword
+  // 4. Must start with an approved read-only keyword
   const isReadOnlyStart =
     normalized.startsWith('SELECT') ||
     normalized.startsWith('WITH') ||
-    normalized.startsWith('EXPLAIN') ||
-    normalized.startsWith('PRAGMA TABLE_INFO');
+    normalized.startsWith('EXPLAIN');
 
   if (!isReadOnlyStart) {
     return {
@@ -77,13 +91,13 @@ export function validateReadOnlyQuery(query: string, maxRows = 50): ValidationRe
     };
   }
 
-  // 5. Check for forbidden mutation keywords outside string literals
+  // 5. Check for forbidden security/mutation tokens outside string literals
   const tokens = normalized.match(/\b[A-Z_]+\b/g) || [];
   for (const token of tokens) {
     if (FORBIDDEN_KEYWORDS.includes(token)) {
       return {
         valid: false,
-        reason: `Forbidden SQL operation detected: "${token}". Mutation queries are strictly blocked.`,
+        reason: `Forbidden SQL operation or security risk detected: "${token}".`,
       };
     }
   }
