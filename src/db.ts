@@ -37,7 +37,7 @@ export class SafeDatabase {
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
-    this.db = new DatabaseSync(dbPath);
+    this.db = new DatabaseSync(dbPath, { readOnly: true });
 
     this.db.exec('PRAGMA busy_timeout = 5000;');
     this.db.exec('PRAGMA query_only = ON;');

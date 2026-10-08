@@ -133,3 +133,14 @@ test('Database: executeQuery executes read query with string literals safely', (
 
   safeDb.close();
 });
+
+test('Database: OS-level readOnly mode blocks write even if raw SQL is attempted', () => {
+  const safeDb = new SafeDatabase(TEST_DB);
+  try {
+    assert.throws(() => {
+      safeDb.db.exec("INSERT INTO users (id, name, email) VALUES (99, 'Evil', 'evil@test.com')");
+    }, /readonly database/);
+  } finally {
+    safeDb.close();
+  }
+});

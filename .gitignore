@@ -4,3 +4,5 @@ dist/
 .DS_Store
 *.db-journal
 test-database.db
+
+.ai-undo/

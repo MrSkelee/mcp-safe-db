@@ -17,9 +17,10 @@ Giving an AI assistant database access is risky:
 - Semicolon injection (`SELECT 1; DROP TABLE users;`) can execute hidden destructive actions.
 - Unbounded queries (`SELECT *`) blow up context windows and burn API tokens.
 
-**mcp-safe-db** solves this with a **Dual-Layer Defense**:
-1. **Layer 1 (Parser Guard)**: Strict AST & regex validation blocks mutation keywords, multiple statements, and comment bypasses. High limits are capped to 50 rows automatically.
-2. **Layer 2 (Engine Lock)**: SQLite engine is locked with `PRAGMA query_only = ON;`. Even if a query bypasses parsing, the database engine physically rejects write operations.
+**mcp-safe-db** solves this with an unbreakable **Triple-Layer Defense**:
+1. **Layer 1 (Parser Guard)**: Strict regex validation blocks mutation keywords (`INSERT`, `UPDATE`, `DROP`, `ALTER`, `PRAGMA`, `ATTACH`, `LOAD_EXTENSION`), multiple statements, and comment bypasses. High limits are capped to 50 rows automatically.
+2. **Layer 2 (Connection Lock)**: SQLite connection is locked with `PRAGMA query_only = ON;`.
+3. **Layer 3 (OS / C-Engine Lock)**: Database is opened natively with `{ readOnly: true }`. Even if raw SQL bypassed earlier checks, the underlying file handle physically forbids disk writes (`attempt to write a readonly database`).
 
 ---
 
