@@ -144,3 +144,15 @@ test('Database: OS-level readOnly mode blocks write even if raw SQL is attempted
     safeDb.close();
   }
 });
+
+test('Security: PRAGMA query_only = OFF cannot bypass OS-level readOnly lock', () => {
+  const safeDb = new SafeDatabase(TEST_DB);
+  try {
+    assert.throws(() => {
+      safeDb.db.exec('PRAGMA query_only = OFF;');
+      safeDb.db.exec("INSERT INTO users (id, name, email) VALUES (99, 'Hacked', 'h@test.com')");
+    }, /readonly database/);
+  } finally {
+    safeDb.close();
+  }
+});
